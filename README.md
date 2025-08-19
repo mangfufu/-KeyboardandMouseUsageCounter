@@ -23,6 +23,7 @@
 5. 点击"重置"按钮可以重置当天的统计数据
 6. 点击"关于"按钮可以查看程序信息
 7. 关闭窗口时，程序会最小化到托盘继续运行
+<img width="1221" height="535" alt="fd33d8b0-4f83-4752-8013-c1dbb5bff1df" src="https://github.com/user-attachments/assets/cf3b9c26-331c-400d-8f8a-a28a2d596ef4" />
 
 ## 导出功能
 
