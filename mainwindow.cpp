@@ -12,6 +12,7 @@
 #include <QWidget>
 #include <QDate>
 #include <QApplication>
+#include <QCoreApplication>
 #include <QDebug>
 #include <QIcon>
 #include <QStyle>
@@ -649,8 +650,13 @@ void MainWindow::initTray()
 
     // 创建托盘图标
     trayIcon = new QSystemTrayIcon(this);
-    // 设置默认图标（使用Qt内置图标）
-    trayIcon->setIcon(QApplication::style()->standardIcon(QStyle::SP_TitleBarMenuButton));
+    // 设置自定义图标（使用Qt资源系统）
+    QIcon icon(":/myicon.ico");
+    if (icon.isNull()) {
+        trayIcon->setIcon(QApplication::style()->standardIcon(QStyle::SP_TitleBarMenuButton));
+    } else {
+        trayIcon->setIcon(icon);
+    }
 
     // 创建托盘菜单
     trayMenu = new QMenu(this);
