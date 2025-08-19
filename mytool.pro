@@ -1,7 +1,7 @@
 QT       += core gui
 
 # 设置项目名称
-TARGET = 键鼠使用统计
+TARGET = KeyMouseStatistics
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -30,3 +30,4 @@ win32: LIBS += -luser32
 qnx: target.path = /tmp/$${TARGET}/bin
 else: unix:!android: target.path = /opt/$${TARGET}/bin
 !isEmpty(target.path): INSTALLS += target
+
