@@ -22,6 +22,8 @@ public:
 signals:
     // 键盘按键信号
     void keyPressed();
+    // 具体按键信号
+    void specificKeyPressed(int keyCode);
     // 鼠标点击信号
     void leftButtonClicked();
     void rightButtonClicked();

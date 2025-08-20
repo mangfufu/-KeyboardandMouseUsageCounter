@@ -25,6 +25,7 @@
 #include <QVector>
 #include <QFrame>
 #include <QtGlobal>
+#include <Windows.h>
 
 // 定义UI标签指针
 QLabel *dateLabel;
@@ -53,6 +54,9 @@ MainWindow::MainWindow(QWidget *parent)
     initHooks();
     initTray();
     loadStatistics();
+
+    // 添加工具提示测试 [已注释]
+    // testToolTip();
 
     // 设置更新计时器，每秒更新一次显示和托盘提示
     // 设置定时器在应用程序不活动时也能触发
@@ -89,6 +93,74 @@ QString MainWindow::getColorStyle(int value)
         color = "#FF0000"; // 红色
     }
     return QString("color: %1; font-weight: bold;").arg(color);
+}
+
+// 根据按键次数返回按键颜色（红色渐变，随次数增加透明度提高，颜色变深）
+QString MainWindow::getKeyName(int keyCode)
+{
+    // 特殊按键映射
+    QMap<int, QString> specialKeys;
+    specialKeys[VK_ESCAPE] = "Esc";
+    specialKeys[VK_F1] = "F1"; specialKeys[VK_F2] = "F2"; specialKeys[VK_F3] = "F3"; specialKeys[VK_F4] = "F4";
+    specialKeys[VK_F5] = "F5"; specialKeys[VK_F6] = "F6"; specialKeys[VK_F7] = "F7"; specialKeys[VK_F8] = "F8";
+    specialKeys[VK_F9] = "F9"; specialKeys[VK_F10] = "F10"; specialKeys[VK_F11] = "F11"; specialKeys[VK_F12] = "F12";
+    specialKeys[VK_BACK] = "Backspace";
+    specialKeys[VK_TAB] = "Tab";
+    specialKeys[VK_RETURN] = "Enter";
+    specialKeys[VK_LSHIFT] = "LShift";    specialKeys[VK_RSHIFT] = "RShift";
+    specialKeys[VK_LCONTROL] = "LCtrl";
+    specialKeys[VK_RCONTROL] = "RCtrl";
+    specialKeys[VK_LMENU] = "LAlt";
+    specialKeys[VK_RMENU] = "RAlt";
+    specialKeys[VK_SPACE] = "Space";
+    specialKeys[VK_CAPITAL] = "CapsLock";
+    specialKeys[VK_NUMLOCK] = "NumLock";
+    specialKeys[VK_SCROLL] = "ScrollLock";
+    specialKeys[VK_INSERT] = "Insert";
+    specialKeys[VK_DELETE] = "Delete";
+    specialKeys[VK_HOME] = "Home";
+    specialKeys[VK_END] = "End";
+    specialKeys[VK_PRIOR] = "PageUp";
+    specialKeys[VK_NEXT] = "PageDown";
+    specialKeys[VK_UP] = "↑";
+    specialKeys[VK_DOWN] = "↓";
+    specialKeys[VK_LEFT] = "←";
+    specialKeys[VK_RIGHT] = "→";
+    specialKeys[VK_OEM_3] = "·";    specialKeys[VK_OEM_MINUS] = "-";    specialKeys[VK_OEM_PLUS] = "=";    specialKeys[VK_OEM_4] = "[";    specialKeys[0x5B] = "[";    specialKeys[VK_OEM_6] = "]";    specialKeys[VK_OEM_5] = "\\";    specialKeys[VK_OEM_1] = ";";    specialKeys[VK_OEM_7] = "'";    specialKeys[VK_OEM_COMMA] = ",";    specialKeys[VK_OEM_PERIOD] = ".";    specialKeys[VK_OEM_2] = "/";
+
+    if (specialKeys.contains(keyCode)) {
+        return specialKeys[keyCode];
+    } else if (keyCode >= '0' && keyCode <= '9') {
+        return QString(QChar(keyCode));
+    } else if (keyCode >= 'A' && keyCode <= 'Z') {
+        return QString(QChar(keyCode));
+    } else if (keyCode >= VK_NUMPAD0 && keyCode <= VK_NUMPAD9) {
+        return QString("Num") + QChar('0' + (keyCode - VK_NUMPAD0));
+    } else if (keyCode >= VK_MULTIPLY && keyCode <= VK_DIVIDE) {
+        switch (keyCode) {
+        case VK_MULTIPLY: return QString("*");
+        case VK_ADD: return QString("+");
+        case VK_SUBTRACT: return QString("-");
+        case VK_DIVIDE: return QString("/");
+        default: return QString("0x") + QString::number(keyCode, 16).toUpper();
+        }
+    } else {
+        return QString("0x") + QString::number(keyCode, 16).toUpper();
+    }
+}
+
+    QString MainWindow::getKeyColor(int count){
+    // 计算透明度 (0-255)，次数越多透明度越高
+    int alpha = qMin(count * 255 / 10000, 255);
+
+    // 计算红色分量，次数越多颜色越深（从红色到黑色）
+    int red = 255 - qMin(count * 255 / 10000, 255);
+
+    // 确保至少有一点红色
+    red = qMax(red, 50);
+
+    // 格式化为RGBA颜色
+    return QString("rgba(%1, 0, 0, %2)").arg(red).arg(alpha / 255.0);
 }
 
 MainWindow::~MainWindow()
@@ -202,7 +274,8 @@ void MainWindow::resetStatistics()
 
 void MainWindow::showAboutDialog()
 {
-    QMessageBox::about(this, "关于", "键盘鼠标统计工具\n版本 1.1\n在后台记录每日键盘按键和鼠标点击次数");
+    QMessageBox::about(this, "关于", "键盘鼠标统计工具\n版本 1.5\nhttps://github.com/mangfufu/-KeyboardandMouseUsageCounter");
+
 }
 
 void MainWindow::onDetailsDialogClosed()
@@ -222,7 +295,7 @@ void MainWindow::showDetailsDialog()
 
     // 创建详情对话框
     detailsDialog = new QDialog(this);
-    detailsDialog->setWindowTitle("每小时统计详情");
+    detailsDialog->setWindowTitle("数据详情");
     detailsDialog->resize(600, 800);
 
     // 连接对话框关闭信号到槽函数
@@ -263,7 +336,7 @@ void MainWindow::showDetailsDialog()
     }
 
     // 创建标题标签
-    QLabel *titleLabel = new QLabel("每小时统计数据");
+    QLabel *titleLabel = new QLabel("数据详情");
     titleLabel->setAlignment(Qt::AlignCenter);
     titleLabel->setStyleSheet("font-weight: bold; font-size: 14px; color: black;");
     scrollLayout->addWidget(titleLabel);
@@ -379,6 +452,275 @@ void MainWindow::showDetailsDialog()
     scrollArea->setWidget(scrollWidget);
     mainLayout->addWidget(scrollArea);
 
+    // 添加键盘布局界面
+    QLabel *keyboardLayoutTitle = new QLabel("键盘按键统计");
+    keyboardLayoutTitle->setAlignment(Qt::AlignCenter);
+    keyboardLayoutTitle->setStyleSheet("font-weight: bold; font-size: 14px; color: black;");
+    mainLayout->addWidget(keyboardLayoutTitle);
+
+    // 创建键盘布局容器
+    QWidget *keyboardWidget = new QWidget();
+    keyboardWidget->setStyleSheet("background-color: #f0f0f0; border-radius: 5px; padding: 10px;");
+    QVBoxLayout *keyboardLayout = new QVBoxLayout(keyboardWidget);
+
+    // 初始化按键代码到按钮的映射
+    keyCodeToButton.clear();
+
+    // 创建键盘行
+    QVector<QHBoxLayout*> keyboardRows;
+    for (int i = 0; i < 7; i++) {
+        QHBoxLayout *row = new QHBoxLayout();
+        row->setSpacing(5);
+        row->setAlignment(Qt::AlignCenter); // 使每行按键居中对齐
+        keyboardRows.append(row);
+        keyboardLayout->addLayout(row);
+    }
+
+
+
+    // 第一行：功能键
+    QVector<int> row1Keys = {VK_ESCAPE, VK_F1, VK_F2, VK_F3, VK_F4, VK_F5, VK_F6, VK_F7, VK_F8, VK_F9, VK_F10, VK_F11, VK_F12};
+
+    // 添加左侧空白间隔
+    keyboardRows[0]->addSpacing(40);
+
+    for (int keyCode : row1Keys) {
+        QString keyName = this->getKeyName(keyCode);
+        QPushButton *keyButton = new QPushButton(keyName, this);
+        keyButton->setFixedSize(60, 30); // 功能键稍小
+        keyButton->setFont(QFont("Arial", 8));
+        // 设置按键颜色和悬停提示
+        int count = keyCounts.value(keyCode, 0);
+        QString bgColor = getKeyColor(count);
+        // 设置悬停提示文本
+        QString toolTipText = QString("%1: %2次").arg(keyName).arg(count);
+        // 统一使用测试按钮的实现方式：同时设置按钮样式和QToolTip样式
+        keyButton->setStyleSheet(QString("QPushButton { background-color: %1; color: black; border-radius: 3px; border: 1px solid #ccc; padding: 3px; } QToolTip { background-color: white !important; color: black !important; border: 1px solid #ccc !important; padding: 3px !important; font-size: 12px !important; }")
+                                 .arg(bgColor));
+        // 应用悬停提示
+        keyButton->setToolTip(toolTipText);
+
+        keyboardRows[0]->addWidget(keyButton);
+        keyCodeToButton[keyCode] = keyButton;
+    }
+
+    // 第二行：数字键
+    QVector<int> row2Keys = {VK_OEM_3, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', VK_OEM_MINUS, VK_OEM_PLUS, VK_BACK};
+    for (int keyCode : row2Keys) {
+        QString keyName = this->getKeyName(keyCode);
+        QPushButton *keyButton = new QPushButton(keyName, this);
+        keyButton->setFixedSize(65, 35);
+        keyButton->setFont(QFont("Arial", 9));
+        // 设置按键颜色和悬停提示
+        int count = keyCounts.value(keyCode, 0);
+        QString bgColor = getKeyColor(count);
+        // 设置悬停提示文本
+        QString toolTipText = QString("%1: %2次").arg(keyName).arg(count);
+        // 统一使用测试按钮的实现方式：同时设置按钮样式和QToolTip样式
+        keyButton->setStyleSheet(QString("QPushButton { background-color: %1; color: black; border-radius: 3px; padding: 5px; } QToolTip { background-color: white !important; color: black !important; border: 1px solid #ccc !important; padding: 3px !important; font-size: 12px !important; }").arg(bgColor));
+        // 应用悬停提示
+        keyButton->setToolTip(toolTipText);
+
+        keyboardRows[1]->addWidget(keyButton);
+        keyCodeToButton[keyCode] = keyButton;
+    }
+
+    // 第三行：字母键 Q-W-E-R-T-Y
+    QVector<int> row3Keys = {VK_TAB, 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', VK_OEM_4, VK_OEM_6, VK_OEM_5};
+    for (int keyCode : row3Keys) {
+        QString keyName = this->getKeyName(keyCode);
+        QPushButton *keyButton = new QPushButton(keyName, this);
+        keyButton->setFixedSize(65, 35);
+        keyButton->setFont(QFont("Arial", 9));
+        // 设置按键颜色和悬停提示
+        int count = keyCounts.value(keyCode, 0);
+        QString bgColor = getKeyColor(count);
+        // 设置悬停提示文本
+        QString toolTipText = QString("%1: %2次").arg(keyName).arg(count);
+        // 统一使用测试按钮的实现方式：同时设置按钮样式和QToolTip样式
+        keyButton->setStyleSheet(QString("QPushButton { background-color: %1; color: black; border-radius: 3px; border: 1px solid #ccc; padding: 5px; } QToolTip { background-color: white !important; color: black !important; border: 1px solid #ccc !important; padding: 3px !important; font-size: 12px !important; }")
+                                 .arg(bgColor));
+        // 应用悬停提示
+        keyButton->setToolTip(toolTipText);
+
+        keyboardRows[2]->addWidget(keyButton);
+        keyCodeToButton[keyCode] = keyButton;
+    }
+
+    // 第四行：字母键 A-S-D-F-G
+    QVector<int> row4Keys = {VK_CAPITAL, 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', VK_OEM_1, VK_OEM_7, VK_RETURN};
+    for (int keyCode : row4Keys) {
+        QString keyName = this->getKeyName(keyCode);
+        QPushButton *keyButton = new QPushButton(keyName, this);
+        keyButton->setFixedSize(65, 35);
+        keyButton->setFont(QFont("Arial", 9));
+        // 设置按键颜色和悬停提示
+        int count = keyCounts.value(keyCode, 0);
+        QString bgColor = getKeyColor(count);
+        // 设置悬停提示文本
+        QString toolTipText = QString("%1: %2次").arg(keyName).arg(count);
+        // 统一使用测试按钮的实现方式：同时设置按钮样式和QToolTip样式
+        keyButton->setStyleSheet(QString("QPushButton { background-color: %1; color: black; border-radius: 3px; border: 1px solid #ccc; padding: 5px; } QToolTip { background-color: white !important; color: black !important; border: 1px solid #ccc !important; padding: 3px !important; font-size: 12px !important; }")
+                                 .arg(bgColor));
+        // 应用悬停提示
+        keyButton->setToolTip(toolTipText);
+
+        keyboardRows[3]->addWidget(keyButton);
+        keyCodeToButton[keyCode] = keyButton;
+    }
+
+    // 第五行：字母键 Z-X-C-V-B
+    QVector<int> row5Keys = {VK_LSHIFT, 'Z', 'X', 'C', 'V', 'B', 'N', 'M', VK_OEM_COMMA, VK_OEM_PERIOD, VK_OEM_2, VK_RSHIFT};
+    for (int keyCode : row5Keys) {
+        QString keyName = this->getKeyName(keyCode);
+        QPushButton *keyButton = new QPushButton(keyName, this);
+        keyButton->setFixedSize(65, 35);
+        keyButton->setFont(QFont("Arial", 9));
+        // 设置按键颜色和悬停提示
+        int count = keyCounts.value(keyCode, 0);
+        QString bgColor = getKeyColor(count);
+        // 设置悬停提示文本
+        QString toolTipText = QString("%1: %2次").arg(keyName).arg(count);
+        // 统一使用测试按钮的实现方式：同时设置按钮样式和QToolTip样式
+        keyButton->setStyleSheet(QString("QPushButton { background-color: %1; color: black; border-radius: 3px; border: 1px solid #ccc; padding: 5px; } QToolTip { background-color: white !important; color: black !important; border: 1px solid #ccc !important; padding: 3px !important; font-size: 12px !important; }")
+                                 .arg(bgColor));
+        // 应用悬停提示
+        keyButton->setToolTip(toolTipText);
+
+        keyboardRows[4]->addWidget(keyButton);
+        keyCodeToButton[keyCode] = keyButton;
+    }
+
+    // 第六行：空行
+    keyboardRows[5]->addSpacing(35); // 保持行高一致
+
+    // 第七行：特殊键和空格键
+    QVector<int> row7Keys = {VK_LCONTROL, VK_LMENU, VK_SPACE, VK_RMENU, VK_RCONTROL};
+
+    // 添加左侧空白间隔
+    keyboardRows[6]->addSpacing(40);
+
+    for (int i = 0; i < row7Keys.size(); i++) {
+        int keyCode = row7Keys[i];
+        QString keyName = this->getKeyName(keyCode);
+        QPushButton *keyButton = new QPushButton(keyName, this);
+        keyButton->setFont(QFont("Arial", 9));
+
+        if (keyCode == VK_SPACE) {
+            keyButton->setFixedSize(300, 35);  // 增大空格键
+        } else if (keyCode == VK_CONTROL || keyCode == VK_MENU) {
+            if (i == 0 || i == row7Keys.size() - 1) {
+                keyButton->setFixedSize(100, 35);  // 左右两侧的Ctrl键稍大
+            } else {
+                keyButton->setFixedSize(85, 35);   // Alt键稍大
+            }
+        } else {
+            keyButton->setFixedSize(65, 35);
+        }
+
+        // 设置按键颜色和悬停提示
+        int count = keyCounts.value(keyCode, 0);
+        QString bgColor = getKeyColor(count);
+        // 设置悬停提示文本
+        QString toolTipText = QString("%1: %2次").arg(keyName).arg(count);
+        // 统一使用测试按钮的实现方式：同时设置按钮样式和QToolTip样式
+        keyButton->setStyleSheet(QString("QPushButton { background-color: %1; color: black; border-radius: 3px; border: 1px solid #ccc; padding: 5px; } QToolTip { background-color: white !important; color: black !important; border: 1px solid #ccc !important; padding: 3px !important; font-size: 12px !important; }")
+                                 .arg(bgColor));
+        // 应用悬停提示
+        keyButton->setToolTip(toolTipText);
+
+
+        keyboardRows[6]->addWidget(keyButton);
+
+        // 在RControl后添加方向键
+        if (i == row7Keys.size() - 1) {
+            // 添加间隔
+            keyboardRows[6]->addSpacing(15);
+
+            // 创建方向键的垂直布局
+            QVBoxLayout *directionLayout = new QVBoxLayout();
+            directionLayout->setSpacing(5);
+            directionLayout->setAlignment(Qt::AlignCenter);
+
+            // 创建上键的水平布局（用于对齐下键）
+            QHBoxLayout *upLayout = new QHBoxLayout();
+            upLayout->setSpacing(5);
+            upLayout->setAlignment(Qt::AlignCenter);
+
+            // 上键
+            QPushButton *upButton = new QPushButton(this->getKeyName(VK_UP), this);
+            upButton->setFixedSize(65, 35);
+            upButton->setFont(QFont("Arial", 9));
+            int upCount = keyCounts.value(VK_UP, 0);
+            upButton->setStyleSheet(QString("QPushButton { background-color: %1; color: black; border-radius: 3px; border: 1px solid #ccc; padding: 5px; } QToolTip { background-color: white !important; color: black !important; border: 1px solid #ccc !important; padding: 3px !important; font-size: 12px !important; }").arg(getKeyColor(upCount)));
+            upButton->setToolTip(QString("%1: %2次").arg(this->getKeyName(VK_UP)).arg(upCount));
+            upLayout->addWidget(upButton);
+            keyCodeToButton[VK_UP] = upButton;
+
+            // 添加上键布局到垂直布局
+            directionLayout->addLayout(upLayout);
+
+            // 创建下键和左右键的水平布局
+            QHBoxLayout *downAndArrowsLayout = new QHBoxLayout();
+            downAndArrowsLayout->setSpacing(5);
+            downAndArrowsLayout->setAlignment(Qt::AlignCenter);
+
+            // 左键
+            QPushButton *leftButton = new QPushButton(this->getKeyName(VK_LEFT), this);
+            leftButton->setFixedSize(65, 35);
+            leftButton->setFont(QFont("Arial", 9));
+            int leftCount = keyCounts.value(VK_LEFT, 0);
+            leftButton->setStyleSheet(QString("QPushButton { background-color: %1; color: black; border-radius: 3px; border: 1px solid #ccc; padding: 5px; } QToolTip { background-color: white !important; color: black !important; border: 1px solid #ccc !important; padding: 3px !important; font-size: 12px !important; }").arg(getKeyColor(leftCount)));
+            leftButton->setToolTip(QString("%1: %2次").arg(this->getKeyName(VK_LEFT)).arg(leftCount));
+            downAndArrowsLayout->addWidget(leftButton);
+            keyCodeToButton[VK_LEFT] = leftButton;
+
+            // 下键
+            QPushButton *downButton = new QPushButton(this->getKeyName(VK_DOWN), this);
+            downButton->setFixedSize(65, 35);
+            downButton->setFont(QFont("Arial", 9));
+            int downCount = keyCounts.value(VK_DOWN, 0);
+            downButton->setStyleSheet(QString("QPushButton { background-color: %1; color: black; border-radius: 3px; border: 1px solid #ccc; padding: 5px; } QToolTip { background-color: white !important; color: black !important; border: 1px solid #ccc !important; padding: 3px !important; font-size: 12px !important; }").arg(getKeyColor(downCount)));
+            downButton->setToolTip(QString("%1: %2次").arg(this->getKeyName(VK_DOWN)).arg(downCount));
+            downAndArrowsLayout->addWidget(downButton);
+            keyCodeToButton[VK_DOWN] = downButton;
+
+            // 右键
+            QPushButton *rightButton = new QPushButton(this->getKeyName(VK_RIGHT), this);
+            rightButton->setFixedSize(65, 35);
+            rightButton->setFont(QFont("Arial", 9));
+            int rightCount = keyCounts.value(VK_RIGHT, 0);
+            rightButton->setStyleSheet(QString("QPushButton { background-color: %1; color: black; border-radius: 3px; border: 1px solid #ccc; padding: 5px; } QToolTip { background-color: white !important; color: black !important; border: 1px solid #ccc !important; padding: 3px !important; font-size: 12px !important; }").arg(getKeyColor(rightCount)));
+            rightButton->setToolTip(QString("%1: %2次").arg(this->getKeyName(VK_RIGHT)).arg(rightCount));
+            downAndArrowsLayout->addWidget(rightButton);
+            keyCodeToButton[VK_RIGHT] = rightButton;
+
+            // 添加水平布局到垂直布局
+            directionLayout->addLayout(downAndArrowsLayout);
+
+            // 将方向键布局添加到键盘行
+            keyboardRows[6]->addLayout(directionLayout);
+        }
+
+        // 在中间的Alt键和空格键之间添加间隔
+        if (i == 1) {
+            keyboardRows[5]->addSpacing(10);
+        }
+
+        // 在空格键和右侧的Alt键之间添加间隔
+        if (i == 2) {
+            keyboardRows[5]->addSpacing(10);
+        }
+
+        keyCodeToButton[keyCode] = keyButton;
+    }
+
+    // 添加右侧空白间隔以使键盘居中
+    keyboardRows[6]->addSpacing(40);
+
+    // 添加键盘布局到主布局
+    mainLayout->addWidget(keyboardWidget);
+
     // 创建关闭按钮
     QPushButton *closeButton = new QPushButton("关闭", detailsDialog);
     connect(closeButton, &QPushButton::clicked, detailsDialog, &QDialog::accept);
@@ -399,10 +741,10 @@ void MainWindow::showDetailsDialog()
         }
     };
 
-    // 创建更新数据的函数，捕获this指针和需要的变量
+    // 创建更新数据的函数，捕获this指针和需要的变量（使用值捕获而非引用捕获）
     auto updateDetailsData = [this, keyLabels, mouseLabels, leftClickLabels, rightClickLabels, hourWidgets, getNumberColorStyle]() {
         QString dateKey = QDate::currentDate().toString("yyyy-MM-dd");
-        
+
         for (int hour = 0; hour < 24; hour++) {
             int keyCount = settings->value(dateKey + "/hourlyKeyCount/" + QString::number(hour), 0).toInt();
             int mouseCount = settings->value(dateKey + "/hourlyMouseCount/" + QString::number(hour), 0).toInt();
@@ -449,12 +791,42 @@ void MainWindow::showDetailsDialog()
             rightClickLabels[hour]->setStyleSheet("color: black;");
 
         }
+
+        // 更新键盘按键颜色和悬停提示
+        for (auto it = keyCodeToButton.begin(); it != keyCodeToButton.end(); ++it) {
+            int keyCode = it.key();
+            QPushButton *button = it.value();
+            int count = keyCounts.value(keyCode, 0);
+            QString keyName = this->getKeyName(keyCode);
+            QString bgColor = getKeyColor(count);
+            // 统一使用测试按钮的实现方式：同时设置按钮样式和QToolTip样式
+            button->setStyleSheet(QString("QPushButton { background-color: %1; color: black; border-radius: 3px; border: 1px solid #ccc; padding: 5px; } QToolTip { background-color: white !important; color: black !important; border: 1px solid #ccc !important; padding: 3px !important; font-size: 12px !important; }")
+                                 .arg(bgColor));
+
+            // 设置悬停提示文本
+            QString toolTipText = QString("%1: %2次").arg(keyName).arg(count);
+            // 应用悬停提示
+            button->setToolTip(toolTipText);
+            // 验证提示文本是否被正确设置
+            // qDebug() << "更新按键悬停提示 - 键名: " << keyName << ", 计数: " << count << ", 提示文本: " << toolTipText;
+            // qDebug() << "按钮实际提示文本: " << button->toolTip();
+            // // 调试信息：显示更新的悬停提示
+            // qDebug() << "更新按键悬停提示 - 键名: " << keyName << ", 计数: " << count << ", 提示文本: " << toolTipText;
+            // 确保按钮文本也使用正确的键名
+            button->setText(keyName);
+        }
     };
 
     // 初始加载数据
     updateDetailsData();
 
-    // 创建定时器，每5秒更新一次数据
+    // 添加调试信息
+    // qDebug() << "keyCounts大小: " << keyCounts.size();
+    // for (auto it = keyCounts.begin(); it != keyCounts.end(); ++it) {
+    //     qDebug() << "按键代码: " << it.key() << "，按键名称: " << getKeyName(it.key()) << "，计数: " << it.value();
+    // }
+
+    // 创建定时器，每1秒更新一次数据
     QTimer *timer = new QTimer(detailsDialog);
     QObject::connect(timer, &QTimer::timeout, timer, [updateDetailsData]() {
         updateDetailsData();
@@ -489,6 +861,36 @@ void MainWindow::handleGlobalKeyPress()
     // 更新显示和托盘提示
     updateDisplay();
     updateTrayTooltip();
+    // 保存数据
+    saveStatistics();
+}
+
+void MainWindow::handleSpecificKeyPress(int keyCode)
+{
+    // 增加具体按键计数
+    keyCounts[keyCode]++;
+
+    // 记录每小时按键数据
+    int currentHour = QTime::currentTime().hour();
+    QString dateKey = today.toString("yyyy-MM-dd");
+    QString keyCodeStr = QString::number(keyCode);
+    int hourlyKeyCount = settings->value(dateKey + "/hourlyKeyCounts/" + keyCodeStr + "/" + QString::number(currentHour), 0).toInt();
+    settings->setValue(dateKey + "/hourlyKeyCounts/" + keyCodeStr + "/" + QString::number(currentHour), hourlyKeyCount + 1);
+
+    // 更新对应按键的悬停提示
+    if (keyCodeToButton.contains(keyCode)) {
+        QPushButton *button = keyCodeToButton[keyCode];
+        int count = keyCounts[keyCode];
+        QString keyName = this->getKeyName(keyCode);
+        button->setStyleSheet(QString("background-color: %1; color: black; border-radius: 3px; border: 1px solid #ccc; padding: 5px;")
+                             .arg(getKeyColor(count)));
+        button->setToolTip(QString("%1: %2次")
+                          .arg(keyName)
+                          .arg(count));
+        // 确保按钮文本也使用正确的键名
+        button->setText(keyName);
+    }
+
     // 保存数据
     saveStatistics();
 }
@@ -549,6 +951,27 @@ void MainWindow::loadStatistics()
     mouseClickCount = settings->value(dateKey + "/mouseClickCount", 0).toInt();
     leftClickCount = settings->value(dateKey + "/leftClickCount", 0).toInt();
     rightClickCount = settings->value(dateKey + "/rightClickCount", 0).toInt();
+
+    // 调试信息：显示加载的总计数
+    qDebug() << "加载统计数据 - 日期: " << dateKey;
+    qDebug() << "按键总数: " << keyPressCount;
+    qDebug() << "鼠标点击总数: " << mouseClickCount;
+
+    // 加载具体按键计数
+    keyCounts.clear();
+    QString keyCountsGroup = dateKey + "/keyCounts/";
+    QStringList allKeys = settings->allKeys();
+    qDebug() << "设置中的键数量: " << allKeys.size();
+    for (const QString &key : allKeys) {
+        if (key.startsWith(keyCountsGroup)) {
+            QString keyCodeStr = key.mid(keyCountsGroup.length());
+            int keyCode = keyCodeStr.toInt();
+            int count = settings->value(key, 0).toInt();
+            keyCounts[keyCode] = count;
+            qDebug() << "加载按键: " << keyCode << " (" << getKeyName(keyCode) << "), 计数: " << count;
+        }
+    }
+    qDebug() << "keyCounts大小: " << keyCounts.size();
 }
 
 void MainWindow::saveStatistics()
@@ -559,6 +982,23 @@ void MainWindow::saveStatistics()
     settings->setValue(dateKey + "/mouseClickCount", mouseClickCount);
     settings->setValue(dateKey + "/leftClickCount", leftClickCount);
     settings->setValue(dateKey + "/rightClickCount", rightClickCount);
+
+    // 保存具体按键计数
+    QString keyCountsGroup = dateKey + "/keyCounts/";
+    // 先删除旧数据
+    QStringList allKeys = settings->allKeys();
+    for (const QString &key : allKeys) {
+        if (key.startsWith(keyCountsGroup)) {
+            settings->remove(key);
+        }
+    }
+    // 保存新数据
+    for (auto it = keyCounts.begin(); it != keyCounts.end(); ++it) {
+        int keyCode = it.key();
+        int count = it.value();
+        settings->setValue(keyCountsGroup + QString::number(keyCode), count);
+    }
+
     settings->sync();
 }
 
@@ -566,6 +1006,8 @@ void MainWindow::checkDateChange()
 {
     QDate currentDate = QDate::currentDate();
     if (currentDate != today) {
+        // 导出昨日数据（不显示对话框）
+        exportStatistics(false);
         // 保存昨日数据
         saveStatistics();
         // 更新日期
@@ -629,7 +1071,7 @@ void MainWindow::initUI()
 
     // 创建导出按钮
     QPushButton *exportButton = new QPushButton("导出", this);
-    connect(exportButton, &QPushButton::clicked, this, &MainWindow::exportStatistics);
+    connect(exportButton, &QPushButton::clicked, this, [this]() { exportStatistics(true); });
     buttonLayout->addWidget(exportButton);
 
     // 添加按钮布局到主布局
@@ -641,6 +1083,7 @@ void MainWindow::initUI()
         "QPushButton { background-color: rgb(172, 209, 245); color: black; border-radius: 3px; padding: 5px; font-weight: default; border: 1px solid rgb(172, 209, 245); }"
         "QPushButton:hover { background-color:rgb(186, 232, 255); }"
         "QWidget { background-color: #f5f5f5; }"
+        "QToolTip { background-color: white; color: black; border: 1px solid #ccc; padding: 3px; font-size: 12px; }"
         // 拟态化滚动条样式
         "QScrollBar:vertical {"
             "width: 12px;"
@@ -691,6 +1134,7 @@ void MainWindow::initHooks()
 
     // 连接信号和槽
     connect(hookManager, &GlobalHookManager::keyPressed, this, &MainWindow::handleGlobalKeyPress);
+    connect(hookManager, &GlobalHookManager::specificKeyPressed, this, &MainWindow::handleSpecificKeyPress);
     connect(hookManager, &GlobalHookManager::leftButtonClicked, this, &MainWindow::handleLeftButtonClick);
     connect(hookManager, &GlobalHookManager::rightButtonClicked, this, &MainWindow::handleRightButtonClick);
 
@@ -769,12 +1213,24 @@ void MainWindow::updateTrayTooltip()
     trayIcon->setToolTip(tooltip);
 }
 
+// 测试QToolTip功能的辅助函数 [已注释]
+/*
+void MainWindow::testToolTip() {
+    QPushButton *testButton = new QPushButton("测试提示", this);
+    testButton->setGeometry(10, 10, 100, 30);
+    testButton->setStyleSheet("QPushButton { background-color: yellow; } QToolTip { background-color: pink !important; color: green !important; border: 1px solid #ccc !important; padding: 3px !important; font-size: 12px !important; }");
+    testButton->setToolTip("这是一个测试提示");
+    testButton->show();
+    qDebug() << "测试按钮提示文本: " << testButton->toolTip();
+}*/
+
+
 void MainWindow::showMainWindow()
 {
     // 显示并激活主窗口
     show();
     activateWindow();
-    
+
     // 检查日期变化
     checkDateChange();
     // 直接更新显示数据（使用内存中的最新数据）
@@ -784,11 +1240,13 @@ void MainWindow::showMainWindow()
     saveStatistics();
 }
 
-void MainWindow::exportStatistics()
+void MainWindow::exportStatistics(bool showDialog)
 {
-    // 添加导出确认对话框
-    if (QMessageBox::question(this, "确认导出", "确定要导出统计数据吗？") != QMessageBox::Yes) {
-        return; // 用户选择取消，不执行导出
+    // 根据参数决定是否显示确认对话框
+    if (showDialog) {
+        if (QMessageBox::question(this, "确认导出", "确定要导出统计数据吗？") != QMessageBox::Yes) {
+            return; // 用户选择取消，不执行导出
+        }
     }
 
     // 获取当前日期时间用于创建文件夹和文件名
@@ -802,16 +1260,26 @@ void MainWindow::exportStatistics()
     QString outputDirPath = appPath + QDir::separator() + "output" + QDir::separator() + dateStr + QDir::separator();
     QDir outputDir;
     if (!outputDir.mkpath(outputDirPath)) {
-        QMessageBox::critical(this, "错误", "无法创建输出文件夹: " + outputDirPath + "\n请检查目录权限。");
+        if (showDialog) {
+            QMessageBox::critical(this, "错误", "无法创建输出文件夹: " + outputDirPath + "\n请检查目录权限。");
+        }
         qDebug() << "无法创建输出文件夹: " << outputDirPath;
         return;
     }
 
     // 创建文件路径
-    QString filePath = outputDirPath + datetimeStr + ".txt";
+    QString fileName;
+    if (showDialog) {
+        fileName = datetimeStr + ".txt";
+    } else {
+        fileName = "Autosave_" + datetimeStr + ".txt";
+    }
+    QString filePath = outputDirPath + fileName;
     QFile file(filePath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        QMessageBox::critical(this, "错误", "无法创建输出文件: " + filePath + "\n错误: " + file.errorString());
+        if (showDialog) {
+            QMessageBox::critical(this, "错误", "无法创建输出文件: " + filePath + "\n错误: " + file.errorString());
+        }
         qDebug() << "无法创建输出文件: " << filePath << " 错误: " << file.errorString();
         return;
     }
@@ -831,12 +1299,6 @@ void MainWindow::exportStatistics()
 
     // 写入每小时数据
     out << "=== 每小时数据 ===\n";
-    out << QString("%1%2%3%4%5")
-           .arg("时间", -15)
-           .arg("键盘次数", -10)
-           .arg("鼠标次数", -10)
-           .arg("左键次数", -10)
-           .arg("右键次数", -10) << "\n";
 
     for (int hour = 0; hour < 24; hour++) {
         int keyCount = settings->value(dateStr + "/hourlyKeyCount/" + QString::number(hour), 0).toInt();
@@ -844,12 +1306,36 @@ void MainWindow::exportStatistics()
         int leftClickCount = settings->value(dateStr + "/hourlyLeftClickCount/" + QString::number(hour), 0).toInt();
         int rightClickCount = settings->value(dateStr + "/hourlyRightClickCount/" + QString::number(hour), 0).toInt();
 
-        out << QString("%1:00-%1:59  %2%3%4%5")
+        out << QString("%1:00-%1:59     \n键盘次数:    %2    次      \n鼠标次数:    %3    次      左: %4   次      右: %5 次  \n")
                .arg(hour, 2, 10, QChar('0'))
-               .arg(keyCount, -10)
-               .arg(mouseCount, -10)
-               .arg(leftClickCount, -10)
-               .arg(rightClickCount, -10) << "\n";
+               .arg(keyCount)
+               .arg(mouseCount)
+               .arg(leftClickCount)
+               .arg(rightClickCount) << "\n";
+    }
+
+    // 写入键盘按键详细数据
+    out << "\n=== 键盘按键详细数据 ===\n";
+
+    // 对按键数据进行排序（按按键次数降序）
+    QList<QPair<int, int>> sortedKeys;
+    for (auto it = keyCounts.begin(); it != keyCounts.end(); ++it) {
+        sortedKeys.append(qMakePair(it.key(), it.value()));
+    }
+
+    std::sort(sortedKeys.begin(), sortedKeys.end(), [](const QPair<int, int>& a, const QPair<int, int>& b) {
+        return a.second > b.second; // 按次数降序排序
+    });
+
+    // 写入排序后的按键数据
+    for (const auto& pair : sortedKeys) {
+        int keyCode = pair.first;
+        int count = pair.second;
+        QString keyName = getKeyName(keyCode);
+
+        out << QString("\n按键 %1   :   %2    次")
+               .arg(keyName)
+               .arg(count) << "\n";
     }
 
     // 关闭文件

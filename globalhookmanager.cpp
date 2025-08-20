@@ -51,18 +51,50 @@ void GlobalHookManager::uninstallHooks()
 
 LRESULT CALLBACK GlobalHookManager::keyboardHookProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
-    static bool keyPressed = false;
+    static QSet<int> pressedKeys; // 使用集合跟踪所有按下的键
 
     if (nCode >= 0) {
-        if ((wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) && !keyPressed) {
+        KBDLLHOOKSTRUCT* pKeyboardStruct = (KBDLLHOOKSTRUCT*)lParam;
+        int vkCode = pKeyboardStruct->vkCode;
+        bool isExtended = (pKeyboardStruct->flags & LLKHF_EXTENDED) != 0;
+
+        // 处理左右Ctrl、Alt和Shift键
+        if (vkCode == VK_CONTROL) {
+            // 检查扩展键标志区分左右Ctrl
+            if (isExtended) {
+                vkCode = VK_RCONTROL; // 右Ctrl
+            } else {
+                vkCode = VK_LCONTROL; // 左Ctrl
+            }
+        } else if (vkCode == VK_MENU) {
+            // 检查扩展键标志区分左右Alt
+            if (isExtended) {
+                vkCode = VK_RMENU; // 右Alt
+            } else {
+                vkCode = VK_LMENU; // 左Alt
+            }
+        } else if (vkCode == VK_SHIFT) {
+            // 检查扩展键标志区分左右Shift
+            if (isExtended) {
+                vkCode = VK_RSHIFT; // 右Shift
+            } else {
+                vkCode = VK_LSHIFT; // 左Shift
+            }
+        }
+
+        if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) {
             // 键盘按下事件
-            keyPressed = true;
-            if (m_instance) {
-                emit m_instance->keyPressed();
+            if (!pressedKeys.contains(vkCode)) {
+                pressedKeys.insert(vkCode);
+                if (m_instance) {
+                    emit m_instance->keyPressed();
+                    // 发送具体按键信号
+                    emit m_instance->specificKeyPressed(vkCode);
+                }
             }
         } else if (wParam == WM_KEYUP || wParam == WM_SYSKEYUP) {
             // 键盘释放事件
-            keyPressed = false;
+            pressedKeys.remove(vkCode);
         }
     }
 
