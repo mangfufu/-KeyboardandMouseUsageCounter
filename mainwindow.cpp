@@ -55,8 +55,15 @@ MainWindow::MainWindow(QWidget *parent)
     loadStatistics();
 
     // 设置更新计时器，每秒更新一次显示和托盘提示
-    connect(updateTimer, &QTimer::timeout, this, &MainWindow::updateDisplay);
-    connect(updateTimer, &QTimer::timeout, this, &MainWindow::updateTrayTooltip);
+    // 设置定时器在应用程序不活动时也能触发
+    updateTimer->setTimerType(Qt::CoarseTimer);
+    connect(updateTimer, &QTimer::timeout, this, [this]() {
+        checkDateChange();
+        updateDisplay();
+        updateTrayTooltip();
+        // 定期保存数据
+        saveStatistics();
+    });
     updateTimer->start(1000);
 
     // 设置窗口大小
@@ -108,8 +115,9 @@ void MainWindow::showEvent(QShowEvent *event)
     checkDateChange();
     // 加载统计数据
     loadStatistics();
-    // 更新显示
+    // 更新显示和托盘提示
     updateDisplay();
+    updateTrayTooltip();
     // 确保钩子已安装
     if (!hookManager || !hookManager->installHooks()) {
         initHooks();
@@ -143,6 +151,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
         QMainWindow::closeEvent(event);
     } else if (msgBox.clickedButton() == minimizeButton) {
         // 最小化到托盘
+        saveStatistics();
         hide();
         event->ignore();
     } else {
@@ -184,8 +193,10 @@ void MainWindow::resetStatistics()
         }
 
         // 保存重置后的数据
-        saveStatistics();
-        updateDisplay();
+    saveStatistics();
+    // 更新显示和托盘提示
+    updateDisplay();
+    updateTrayTooltip();
     }
 }
 
@@ -430,7 +441,7 @@ void MainWindow::showDetailsDialog()
     QObject::connect(timer, &QTimer::timeout, timer, [updateDetailsData]() {
         updateDetailsData();
     });
-    timer->start(5000); // 5000毫秒 = 5秒
+    timer->start(1000); // 5000毫秒 = 5秒
 
     // 设置对话框为非模态
     detailsDialog->setModal(false);
@@ -457,10 +468,11 @@ void MainWindow::handleGlobalKeyPress()
     QString dateKey = today.toString("yyyy-MM-dd");
     int hourlyKeyCount = settings->value(dateKey + "/hourlyKeyCount/" + QString::number(currentHour), 0).toInt();
     settings->setValue(dateKey + "/hourlyKeyCount/" + QString::number(currentHour), hourlyKeyCount + 1);
-    settings->sync();
-
-    // 更新显示
+    // 更新显示和托盘提示
     updateDisplay();
+    updateTrayTooltip();
+    // 保存数据
+    saveStatistics();
 }
 
 void MainWindow::handleLeftButtonClick()
@@ -479,10 +491,11 @@ void MainWindow::handleLeftButtonClick()
     // 记录每小时左键数据
     int hourlyLeftClickCount = settings->value(dateKey + "/hourlyLeftClickCount/" + QString::number(currentHour), 0).toInt();
     settings->setValue(dateKey + "/hourlyLeftClickCount/" + QString::number(currentHour), hourlyLeftClickCount + 1);
-    settings->sync();
-
-    // 更新显示
+    // 更新显示和托盘提示
     updateDisplay();
+    updateTrayTooltip();
+    // 保存数据
+    saveStatistics();
 }
 
 void MainWindow::handleRightButtonClick()
@@ -503,8 +516,11 @@ void MainWindow::handleRightButtonClick()
     settings->setValue(dateKey + "/hourlyRightClickCount/" + QString::number(currentHour), hourlyRightClickCount + 1);
     settings->sync();
 
-    // 更新显示
+    // 更新显示和托盘提示
     updateDisplay();
+    updateTrayTooltip();
+    // 保存数据
+    saveStatistics();
 }
 
 void MainWindow::loadStatistics()
@@ -703,6 +719,14 @@ void MainWindow::showMainWindow()
     // 显示并激活主窗口
     show();
     activateWindow();
+    
+    // 检查日期变化
+    checkDateChange();
+    // 直接更新显示数据（使用内存中的最新数据）
+    updateDisplay();
+    updateTrayTooltip();
+    // 保存数据
+    saveStatistics();
 }
 
 void MainWindow::exportStatistics()
@@ -718,12 +742,13 @@ void MainWindow::exportStatistics()
     QString datetimeStr = currentDateTime.toString(datetimeFormat);
     QString dateStr = currentDateTime.toString("yyyy-MM-dd");
 
-    // 创建文件夹路径
+    // 创建文件夹路径 - 使用QDir::separator()确保跨平台兼容性
     QString appPath = QCoreApplication::applicationDirPath();
-    QString outputDirPath = appPath + "/output/" + dateStr + "/";
+    QString outputDirPath = appPath + QDir::separator() + "output" + QDir::separator() + dateStr + QDir::separator();
     QDir outputDir;
     if (!outputDir.mkpath(outputDirPath)) {
-        QMessageBox::critical(this, "错误", "无法创建输出文件夹");
+        QMessageBox::critical(this, "错误", "无法创建输出文件夹: " + outputDirPath + "\n请检查目录权限。");
+        qDebug() << "无法创建输出文件夹: " << outputDirPath;
         return;
     }
 
@@ -731,7 +756,8 @@ void MainWindow::exportStatistics()
     QString filePath = outputDirPath + datetimeStr + ".txt";
     QFile file(filePath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        QMessageBox::critical(this, "错误", "无法创建输出文件");
+        QMessageBox::critical(this, "错误", "无法创建输出文件: " + filePath + "\n错误: " + file.errorString());
+        qDebug() << "无法创建输出文件: " << filePath << " 错误: " << file.errorString();
         return;
     }
 
