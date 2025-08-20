@@ -2,6 +2,8 @@
 
 ## 项目介绍
 这是一个简单实用的键盘鼠标统计工具，可以在后台记录您的键盘按键次数和鼠标点击次数，并提供详细的统计信息和数据导出功能。
+此项目由AI助手 Trae CN Doubao-seed-1.6主要完成。
+<img width="1660" height="1030" alt="d2a92605-ecc7-46e5-b42d-123fced1fe1f" src="https://github.com/user-attachments/assets/9a475441-312a-436c-88ae-34c579982ffc" />
 
 ## 功能特点
 
