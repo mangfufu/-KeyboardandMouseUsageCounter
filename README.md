@@ -3,7 +3,7 @@
 <img width="1380" height="640" alt="image" src="https://github.com/user-attachments/assets/5f2adc1e-8c16-4920-be0d-bfb3763c7527" />
 
 ## 项目介绍
-（本项目由Trae CN Doubao-Seed-1.6 编写，本人基本未改动，包括readme.md）
+（本项目由Trae CN Doubao-Seed-1.6 编写，本人基本未改动，包括本说明readme.md）
 这是一个简单实用的键盘鼠标统计工具，可以在后台记录您的键盘按键次数和鼠标点击次数，并提供详细的统计信息和数据导出功能。
 
 ## 功能特点
@@ -42,5 +42,6 @@
 
 ## 版本信息
 
-- 版本：1.1
+- 版本：1.3
 - 发布日期：2025年8月20日
+- 更新日期：2025年8月20日下午
