@@ -223,7 +223,7 @@ void MainWindow::showDetailsDialog()
     // 创建详情对话框
     detailsDialog = new QDialog(this);
     detailsDialog->setWindowTitle("每小时统计详情");
-    detailsDialog->resize(400, 400);
+    detailsDialog->resize(600, 800);
 
     // 连接对话框关闭信号到槽函数
     connect(detailsDialog, &QDialog::finished, this, &MainWindow::onDetailsDialogClosed);
@@ -237,11 +237,12 @@ void MainWindow::showDetailsDialog()
     QWidget *scrollWidget = new QWidget();
     QVBoxLayout *scrollLayout = new QVBoxLayout(scrollWidget);
 
-    // 创建一个容器来存储所有数据标签，方便后续更新
+    // 创建一个容器来存储所有数据标签和行widget，方便后续更新
     QVector<QLabel*> keyLabels;
     QVector<QLabel*> mouseLabels;
     QVector<QLabel*> leftClickLabels;
     QVector<QLabel*> rightClickLabels;
+    QVector<QWidget*> hourWidgets; // 存储每小时行的widget
 
     // 实时加载最新的每小时数据
     QString dateKey = today.toString("yyyy-MM-dd");
@@ -303,9 +304,18 @@ void MainWindow::showDetailsDialog()
     scrollLayout->addWidget(line);
 
     // 显示每小时数据
+    int currentHour = QTime::currentTime().hour(); // 获取当前小时
     for (int hour = 0; hour < 24; hour++) {
         // 创建水平布局
         QHBoxLayout *hourLayout = new QHBoxLayout();
+
+        // 为当前小时的行添加背景色
+        QWidget *hourWidget = new QWidget();
+        hourWidget->setLayout(hourLayout);
+        hourWidgets.append(hourWidget); // 添加到widget容器
+        if (hour == currentHour) {
+            hourWidget->setStyleSheet("background-color:rgba(204, 237, 234, 0.82);"); // 淡绿色背景（行高亮）
+        }
 
         // 时间标签
         QLabel *timeLabel = new QLabel(QString("%1:00-%1:59").arg(hour, 2, 10, QChar('0')));
@@ -362,7 +372,7 @@ void MainWindow::showDetailsDialog()
         hourLayout->addWidget(rightClickLabel);
 
         // 添加到滚动布局
-        scrollLayout->addLayout(hourLayout);
+        scrollLayout->addWidget(hourWidget);
     }
 
     // 设置滚动区域
@@ -390,7 +400,7 @@ void MainWindow::showDetailsDialog()
     };
 
     // 创建更新数据的函数，捕获this指针和需要的变量
-    auto updateDetailsData = [this, keyLabels, mouseLabels, leftClickLabels, rightClickLabels, getNumberColorStyle]() {
+    auto updateDetailsData = [this, keyLabels, mouseLabels, leftClickLabels, rightClickLabels, hourWidgets, getNumberColorStyle]() {
         QString dateKey = QDate::currentDate().toString("yyyy-MM-dd");
         
         for (int hour = 0; hour < 24; hour++) {
@@ -405,6 +415,14 @@ void MainWindow::showDetailsDialog()
             keyLabels[hour]->setText(QString("键盘: <span style='%1'>%2</span>次").arg(keyColorStyle).arg(keyText));
             keyLabels[hour]->setTextFormat(Qt::RichText);
             keyLabels[hour]->setStyleSheet("color: black;");
+
+            // 更新当前小时行的背景色
+            int currentHour = QTime::currentTime().hour(); // 获取当前小时
+            if (hour == currentHour) {
+                hourWidgets[hour]->setStyleSheet("background-color:rgba(204, 237, 234, 0.82);"); // 淡绿色背景（行高亮）
+            } else {
+                hourWidgets[hour]->setStyleSheet("background-color: transparent;");
+            }
 
 
             // 更新鼠标总点击数据标签
@@ -620,9 +638,46 @@ void MainWindow::initUI()
     // 设置样式
     QString styleSheet = ""
         "QLabel { font-size: 14px; color: #333; }"
-        "QPushButton { background-color: #0bda68; color: green; border-radius: 6px; padding: 8px; font-weight: bold; border: 1px solid #1976D2; }"
-        "QPushButton:hover { background-color: #00ddaa; }"
-        "QWidget { background-color: #f5f5f5; }";
+        "QPushButton { background-color: rgb(172, 209, 245); color: black; border-radius: 3px; padding: 5px; font-weight: default; border: 1px solid rgb(172, 209, 245); }"
+        "QPushButton:hover { background-color:rgb(186, 232, 255); }"
+        "QWidget { background-color: #f5f5f5; }"
+        // 拟态化滚动条样式
+        "QScrollBar:vertical {"
+            "width: 12px;"
+            "margin: 5px 0 5px 0;"
+            "background: rgba(204, 237, 234, 0.82);"
+            "border-radius: 0px;"
+        "}"
+        "QScrollBar::handle:vertical {"
+            "background: rgba(204, 237, 234, 0.82);"
+            "border-radius: 0px;"
+            "min-height: 20px;"
+        "}"
+        "QScrollBar::handle:vertical:hover {"
+            "background:rgba(0, 200, 255, 0.27);"
+        "}"
+        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
+            "background: transparent;"
+            "height: 3px;"
+        "}"
+        "QScrollBar:horizontal {"
+            "height: 12px;"
+            "margin: 0 5px 0 5px;"
+            "background:rgba(204, 237, 234, 0.82);"
+            "border-radius: 0px;"
+        "}"
+        "QScrollBar::handle:horizontal {"
+            "background:rgba(204, 237, 234, 0.82);"
+            "border-radius: 0px;"
+            "min-width: 20px;"
+        "}"
+        "QScrollBar::handle:horizontal:hover {"
+            "background:rgba(0, 200, 255, 0.27);"
+        "}"
+        "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {"
+            "background: transparent;"
+            "width: 3px;"
+        "}";
     setStyleSheet(styleSheet);
 }
 
