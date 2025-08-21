@@ -3,6 +3,8 @@
 
 #include <QMainWindow>
 #include <QPushButton>
+#include <QLabel>
+#include <QVector>
 #include <QDate>
 #include <QSettings>
 #include <QTimer>
@@ -46,32 +48,55 @@ private slots:
     void handleLeftButtonClick();
     // 处理右键点击
     void handleRightButtonClick();
+
+    // 导出键盘布局为图片
     // 显示详情对话框
     void showDetailsDialog();
-
 private:
     // 测试QToolTip功能的辅助函数 [已注释]
     // void testToolTip();
+    // 统一导出功能
+    void exportData();
     // 导出统计数据
     void exportStatistics(bool showDialog = true);
+    // 导出键盘布局为图片
+    void exportKeyboardLayoutAsImage(bool showDialog = true);
     // 详情对话框关闭槽函数
     void onDetailsDialogClosed();
+    // 切换深色模式
+    void toggleDarkMode();
+    // 更新主题样式
+    void updateTheme();
+    // 自动保存定时器槽函数
+    void autoSaveData();
 
 private:
     Ui::MainWindow *ui;
     int keyPressCount;         // 键盘按键计数
     QMap<int, int> keyCounts;  // 具体按键计数
     QMap<int, QPushButton*> keyCodeToButton;  // 按键代码到按钮的映射
+    QWidget *keyboardWidget;                  // 键盘容器引用
+    QLabel *detailsTitleLabel;                 // 数据详情标题
+    QLabel *keyboardLayoutTitleLabel;          // 键盘按键统计标题
+    QVector<QLabel*> timeLabels;               // 时间范围标签
+    QVector<QLabel*> keyLabels;                // 键盘数据标签
+    QVector<QLabel*> mouseLabels;              // 鼠标数据标签
+    QVector<QLabel*> leftClickLabels;          // 左键数据标签
+    QVector<QLabel*> rightClickLabels;         // 右键数据标签
+    QVector<QWidget*> hourWidgets;              // 小时数据窗口部件
     int mouseClickCount;       // 鼠标总点击计数
     int leftClickCount;        // 左键点击计数
     int rightClickCount;       // 右键点击计数
     QDate today;               // 当前日期
     QSettings *settings;       // 设置对象
     QTimer *updateTimer;       // 更新计时器
+    QTimer *autoSaveTimer;     // 自动保存计时器
     GlobalHookManager *hookManager; // 全局钩子管理器
     QSystemTrayIcon *trayIcon; // 托盘图标
     QMenu *trayMenu;           // 托盘菜单
     QDialog *detailsDialog;    // 详情对话框
+    bool isDarkMode;           // 是否为深色模式
+    QPushButton *themeToggleButton; // 主题切换按钮
 
     // 获取按键颜色
     QString getKeyColor(int count);
