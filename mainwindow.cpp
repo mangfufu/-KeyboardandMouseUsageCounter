@@ -262,7 +262,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
     msgBox.button(QMessageBox::Cancel)->setText("取消");
 
     // 显示对话框并等待用户选择
-    int result = msgBox.exec();
+    msgBox.exec();
 
     // 根据用户选择执行相应操作
     if (msgBox.clickedButton() == exitButton) {
@@ -2513,16 +2513,19 @@ void MainWindow::checkForUpdates()
             QString updateUrl;
             QString checksum;
 
-            // 查找资产
-            QJsonArray assets = latestRelease["assets"].toArray();
-            for (const QJsonValue &asset : assets) {
-                QJsonObject assetObj = asset.toObject();
-                QString name = assetObj["name"].toString();
-                if (name.contains(".zip", Qt::CaseInsensitive)) {
-                    updateUrl = assetObj["browser_download_url"].toString();
-                    break;
-                }
+            // 查找资产 - 同时查找ZIP和EXE文件
+        QJsonArray assets = latestRelease["assets"].toArray();
+        QString zipUrl, exeUrl;
+        for (const QJsonValue &asset : assets) {
+            QJsonObject assetObj = asset.toObject();
+            QString name = assetObj["name"].toString();
+            if (name.contains(".zip", Qt::CaseInsensitive)) {
+                zipUrl = assetObj["browser_download_url"].toString();
             }
+            if (name.contains(".exe", Qt::CaseInsensitive)) {
+                exeUrl = assetObj["browser_download_url"].toString();
+            }
+        }
 
             // 尝试从release body中提取校验和
             QString body = latestRelease["body"].toString();
@@ -2532,13 +2535,48 @@ void MainWindow::checkForUpdates()
                 checksum = match.captured(1);
             }
 
-            // 提示用户是否下载
-            int reply = QMessageBox::question(this, "发现新版本",
-                QString("发现新版本 %1，当前版本 %2。\n是否下载更新？").arg(latestVersion).arg(APP_VERSION),
-                QMessageBox::Yes | QMessageBox::No);
+            // 提示用户选择下载类型
+            QString downloadType;
+            if (!zipUrl.isEmpty() && !exeUrl.isEmpty()) {
+                // 同时有ZIP和EXE文件
+                QMessageBox msgBox(this);
+                msgBox.setWindowTitle("发现新版本");
+                msgBox.setText(QString("发现新版本 %1，当前版本 %2。\n请选择下载类型：").arg(latestVersion).arg(APP_VERSION));
+                msgBox.setStandardButtons(QMessageBox::NoButton);
 
-            if (reply == QMessageBox::Yes) {
-                downloadUpdate(updateUrl, checksum, latestVersion);
+                // 添加自定义按钮
+                QPushButton *zipButton = msgBox.addButton("ZIP压缩包", QMessageBox::ActionRole);
+                QPushButton *exeButton = msgBox.addButton("EXE安装程序", QMessageBox::ActionRole);
+                msgBox.addButton(QMessageBox::Cancel);
+                msgBox.button(QMessageBox::Cancel)->setText("取消");
+
+                msgBox.exec();
+
+                if (msgBox.clickedButton() == zipButton) {
+                    downloadUpdate(zipUrl, checksum, latestVersion, "zip");
+                } else if (msgBox.clickedButton() == exeButton) {
+                    downloadUpdate(exeUrl, checksum, latestVersion, "exe");
+                }
+            } else if (!zipUrl.isEmpty()) {
+                // 只有ZIP文件
+                int reply = QMessageBox::question(this, "发现新版本",
+                    QString("发现新版本 %1，当前版本 %2。\n是否下载ZIP压缩包更新？").arg(latestVersion).arg(APP_VERSION),
+                    QMessageBox::Yes | QMessageBox::No);
+
+                if (reply == QMessageBox::Yes) {
+                    downloadUpdate(zipUrl, checksum, latestVersion, "zip");
+                }
+            } else if (!exeUrl.isEmpty()) {
+                // 只有EXE文件
+                int reply = QMessageBox::question(this, "发现新版本",
+                    QString("发现新版本 %1，当前版本 %2。\n是否下载EXE安装程序更新？").arg(latestVersion).arg(APP_VERSION),
+                    QMessageBox::Yes | QMessageBox::No);
+
+                if (reply == QMessageBox::Yes) {
+                    downloadUpdate(exeUrl, checksum, latestVersion, "exe");
+                }
+            } else {
+                QMessageBox::critical(this, "更新失败", "未找到可用的更新文件");
             }
         } else {
             QMessageBox::information(this, "更新检查", "当前已经是最新版本");
@@ -2569,7 +2607,7 @@ bool MainWindow::isVersionGreater(const QString &newVersion, const QString &oldV
     return false; // 版本相同
 }
 
-void MainWindow::downloadUpdate(const QString &updateUrl, const QString &checksum, const QString &latestVersion)
+void MainWindow::downloadUpdate(const QString &updateUrl, const QString &checksum, const QString &latestVersion, const QString &fileType)
 {
     if (updateUrl.isEmpty()) {
         QMessageBox::critical(this, "下载失败", "更新文件URL为空");
@@ -2612,7 +2650,7 @@ void MainWindow::downloadUpdate(const QString &updateUrl, const QString &checksu
     });
 
     // 连接完成信号
-    connect(manager, &QNetworkAccessManager::finished, this, [this, reply, filePath, checksum, latestVersion](QNetworkReply *networkReply) {
+    connect(manager, &QNetworkAccessManager::finished, this, [this, reply, filePath, checksum, latestVersion, fileType](QNetworkReply *networkReply) {
         if (networkReply->error() != QNetworkReply::NoError) {
             if (networkReply->error() != QNetworkReply::OperationCanceledError) {
                 QMessageBox::critical(this, "下载失败", "下载更新失败: " + networkReply->errorString() + "\n\n可能需要使用代理服务器访问GitHub。");
@@ -2640,9 +2678,14 @@ void MainWindow::downloadUpdate(const QString &updateUrl, const QString &checksu
             return;
         }
 
-        // 提示用户手动更新
-        QMessageBox::information(this, "下载完成",
-            QString("更新文件已下载到:\n%1\n\n请退出程序，覆盖安装旧程序。").arg(filePath));
+        // 根据文件类型显示不同的提示信息
+        QString message;
+        if (fileType == "exe") {
+            message = QString("更新文件已下载到:\n%1\n\n请退出程序，运行安装程序进行更新。").arg(filePath);
+        } else {
+            message = QString("更新文件已下载到:\n%1\n\n请退出程序，解压缩文件并覆盖旧程序。").arg(filePath);
+        }
+        QMessageBox::information(this, "下载完成", message);
     });
 
     progress.exec();
