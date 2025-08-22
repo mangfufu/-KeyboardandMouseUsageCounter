@@ -15,6 +15,19 @@
 #include <QApplication>
 #include <QCoreApplication>
 #include <QDebug>
+#include <QNetworkAccessManager>
+#include <QNetworkRequest>
+#include <QNetworkReply>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QFile>
+#include <QDir>
+#include <QProgressDialog>
+#include <QProcess>
+#include <QCryptographicHash>
+#include <QProcess>
+#include <QProgressDialog>
 #include <QIcon>
 #include <QStyle>
 #include <QTime>
@@ -243,8 +256,13 @@ void MainWindow::closeEvent(QCloseEvent *event)
     QPushButton *exitButton = msgBox.addButton("退出程序", QMessageBox::ActionRole);
     // 添加最小化到托盘按钮
     QPushButton *minimizeButton = msgBox.addButton("最小化到托盘", QMessageBox::ActionRole);
+    // 设置标准按钮为取消按钮
+    msgBox.setStandardButtons(QMessageBox::Cancel);
+    // 设置取消按钮文本
+    msgBox.button(QMessageBox::Cancel)->setText("取消");
+
     // 显示对话框并等待用户选择
-    msgBox.exec();
+    int result = msgBox.exec();
 
     // 根据用户选择执行相应操作
     if (msgBox.clickedButton() == exitButton) {
@@ -260,7 +278,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
         hide();
         event->ignore();
     } else {
-        // 取消关闭
+        // 点击×按钮或其他情况，只关闭对话框
         event->ignore();
     }
 }
@@ -307,9 +325,47 @@ void MainWindow::resetStatistics()
 
 void MainWindow::showAboutDialog()
 {
-    QMessageBox::about(this, "关于", "键盘鼠标统计工具\n版本 1.6\nhttps://github.com/mangfufu/-KeyboardandMouseUsageCounter");
+    QDialog dialog(this);
+    dialog.setWindowTitle("关于");
+    dialog.setFixedSize(300, 200);
 
+    QVBoxLayout *layout = new QVBoxLayout(&dialog);
+    QLabel *titleLabel = new QLabel("键盘鼠标统计工具");
+    titleLabel->setAlignment(Qt::AlignCenter);
+    titleLabel->setStyleSheet("font-size: 16px; font-weight: bold;");
+
+    QLabel *versionLabel = new QLabel(QString("版本 %1").arg(APP_VERSION));
+    versionLabel->setAlignment(Qt::AlignCenter);
+
+    QLabel *urlLabel = new QLabel("<a href='https://github.com/mangfufu/-KeyboardandMouseUsageCounter'>GitHub 仓库</a>");
+    urlLabel->setAlignment(Qt::AlignCenter);
+    urlLabel->setOpenExternalLinks(true);
+
+    QPushButton *checkUpdateButton = new QPushButton("检查更新");
+    checkUpdateButton->setFixedWidth(100);
+    connect(checkUpdateButton, &QPushButton::clicked, this, &MainWindow::checkForUpdates);
+
+    layout->addSpacing(20);
+    layout->addWidget(titleLabel);
+    layout->addWidget(versionLabel);
+    layout->addSpacing(10);
+    layout->addWidget(urlLabel);
+    layout->addStretch();
+    layout->addWidget(checkUpdateButton, 0, Qt::AlignCenter);
+    layout->addSpacing(20);
+
+    dialog.exec();
 }
+
+
+
+
+
+
+
+
+
+
 
 void MainWindow::onDetailsDialogClosed()
 {
@@ -1621,6 +1677,16 @@ void MainWindow::cleanupHooks()
     }
 }
 
+void MainWindow::exitApplication()
+{
+    // 保存统计数据
+    saveStatistics();
+    // 清理钩子
+    cleanupHooks();
+    // 退出应用
+    qApp->quit();
+}
+
 void MainWindow::initTray()
 {
     // 检查系统是否支持托盘
@@ -1649,7 +1715,7 @@ void MainWindow::initTray()
 
     // 创建"退出"菜单项
     QAction *exitAction = new QAction("退出程序", this);
-    connect(exitAction, &QAction::triggered, qApp, &QApplication::quit);
+    connect(exitAction, &QAction::triggered, this, &MainWindow::exitApplication);
     trayMenu->addAction(exitAction);
 
     // 设置托盘菜单
@@ -2404,6 +2470,218 @@ void MainWindow::exportStatistics(bool showDialog)
     // 关闭文件
     file.close();
 
-    // 显示成功消息
-    QMessageBox::information(this, "成功", "数据已成功导出到:\n" + filePath);
+    if (showDialog) {
+        QMessageBox::information(this, "成功", "统计数据已成功导出到:\n" + filePath);
+    }
 }
+
+void MainWindow::checkForUpdates()
+{
+    // 创建网络访问管理器
+    QNetworkAccessManager *manager = new QNetworkAccessManager(this);
+    connect(manager, &QNetworkAccessManager::finished, this, [this](QNetworkReply *reply) {
+        if (reply->error() != QNetworkReply::NoError) {
+            QMessageBox::critical(this, "更新检查失败", "无法连接到服务器: " + reply->errorString() + "\n\n可能需要使用代理服务器访问GitHub。");
+            reply->deleteLater();
+            return;
+        }
+
+        // 解析GitHub API响应
+        QJsonDocument jsonDoc = QJsonDocument::fromJson(reply->readAll());
+        if (!jsonDoc.isArray()) {
+            QMessageBox::critical(this, "更新检查失败", "无效的响应格式");
+            reply->deleteLater();
+            return;
+        }
+
+        QJsonArray releases = jsonDoc.array();
+        if (releases.isEmpty()) {
+            QMessageBox::information(this, "更新检查", "没有找到发布版本");
+            reply->deleteLater();
+            return;
+        }
+
+        // 获取最新版本
+        QJsonObject latestRelease = releases[0].toObject();
+        QString latestVersion = latestRelease["tag_name"].toString();
+        // 去掉版本号前面的"v"或其他前缀
+        latestVersion = latestVersion.remove(QRegularExpression("^[^0-9]*"));
+
+        // 比较版本号
+        if (isVersionGreater(latestVersion, APP_VERSION)) {
+            // 有新版本
+            QString updateUrl;
+            QString checksum;
+
+            // 查找资产
+            QJsonArray assets = latestRelease["assets"].toArray();
+            for (const QJsonValue &asset : assets) {
+                QJsonObject assetObj = asset.toObject();
+                QString name = assetObj["name"].toString();
+                if (name.contains(".zip", Qt::CaseInsensitive)) {
+                    updateUrl = assetObj["browser_download_url"].toString();
+                    break;
+                }
+            }
+
+            // 尝试从release body中提取校验和
+            QString body = latestRelease["body"].toString();
+            QRegularExpression checksumRegex("SHA256:\\s*([0-9a-fA-F]{64})", QRegularExpression::CaseInsensitiveOption);
+            QRegularExpressionMatch match = checksumRegex.match(body);
+            if (match.hasMatch()) {
+                checksum = match.captured(1);
+            }
+
+            // 提示用户是否下载
+            int reply = QMessageBox::question(this, "发现新版本",
+                QString("发现新版本 %1，当前版本 %2。\n是否下载更新？").arg(latestVersion).arg(APP_VERSION),
+                QMessageBox::Yes | QMessageBox::No);
+
+            if (reply == QMessageBox::Yes) {
+                downloadUpdate(updateUrl, checksum, latestVersion);
+            }
+        } else {
+            QMessageBox::information(this, "更新检查", "当前已经是最新版本");
+        }
+
+        reply->deleteLater();
+    });
+
+    // 发送请求到GitHub API
+    QUrl url("https://api.github.com/repos/mangfufu/-KeyboardandMouseUsageCounter/releases");
+    manager->get(QNetworkRequest(url));
+}
+
+bool MainWindow::isVersionGreater(const QString &newVersion, const QString &oldVersion)
+{
+    // 版本号比较函数
+    QStringList newParts = newVersion.split(".");
+    QStringList oldParts = oldVersion.split(".");
+
+    int maxLen = qMax(newParts.size(), oldParts.size());
+    for (int i = 0; i < maxLen; i++) {
+        int newValue = (i < newParts.size()) ? newParts[i].toInt() : 0;
+        int oldValue = (i < oldParts.size()) ? oldParts[i].toInt() : 0;
+
+        if (newValue > oldValue) return true;
+        if (newValue < oldValue) return false;
+    }
+    return false; // 版本相同
+}
+
+void MainWindow::downloadUpdate(const QString &updateUrl, const QString &checksum, const QString &latestVersion)
+{
+    if (updateUrl.isEmpty()) {
+        QMessageBox::critical(this, "下载失败", "更新文件URL为空");
+        return;
+    }
+
+    // 创建下载目录
+    QString appPath = QCoreApplication::applicationDirPath();
+    QString updateDirPath = appPath + QDir::separator() + "updates" + QDir::separator() + latestVersion + QDir::separator();
+    QDir updateDir;
+    if (!updateDir.mkpath(updateDirPath)) {
+        QMessageBox::critical(this, "下载失败", "无法创建更新目录: " + updateDirPath);
+        return;
+    }
+
+    // 提取文件名
+    QUrl url(updateUrl);
+    QString fileName = url.fileName();
+    QString filePath = updateDirPath + fileName;
+
+    // 创建进度对话框
+    QProgressDialog progress("正在下载更新...", "取消", 0, 100, this);
+    progress.setWindowModality(Qt::WindowModal);
+    progress.setMinimumDuration(0);
+    progress.setValue(0);
+
+    // 创建网络访问管理器
+    QNetworkAccessManager *manager = new QNetworkAccessManager(this);
+    QNetworkReply *reply = manager->get(QNetworkRequest(url));
+
+    // 连接下载进度信号
+    connect(reply, &QNetworkReply::downloadProgress, this, [&progress, reply](qint64 bytesReceived, qint64 bytesTotal) {
+        if (bytesTotal > 0) {
+            int percent = static_cast<int>((bytesReceived * 100) / bytesTotal);
+            progress.setValue(percent);
+        }
+        if (progress.wasCanceled()) {
+            reply->abort();
+        }
+    });
+
+    // 连接完成信号
+    connect(manager, &QNetworkAccessManager::finished, this, [this, reply, filePath, checksum, latestVersion](QNetworkReply *networkReply) {
+        if (networkReply->error() != QNetworkReply::NoError) {
+            if (networkReply->error() != QNetworkReply::OperationCanceledError) {
+                QMessageBox::critical(this, "下载失败", "下载更新失败: " + networkReply->errorString() + "\n\n可能需要使用代理服务器访问GitHub。");
+            }
+            networkReply->deleteLater();
+            return;
+        }
+
+        // 保存文件
+        QFile file(filePath);
+        if (!file.open(QIODevice::WriteOnly)) {
+            QMessageBox::critical(this, "保存失败", "无法保存更新文件: " + file.errorString());
+            reply->deleteLater();
+            return;
+        }
+
+        file.write(networkReply->readAll());
+        file.close();
+        networkReply->deleteLater();
+
+        // 验证校验和
+        if (!checksum.isEmpty() && !verifyChecksum(filePath, checksum)) {
+            QMessageBox::critical(this, "校验失败", "更新文件校验和不匹配，可能已损坏");
+            QFile::remove(filePath);
+            return;
+        }
+
+        // 提示用户手动更新
+        QMessageBox::information(this, "下载完成",
+            QString("更新文件已下载到:\n%1\n\n请退出程序，覆盖安装旧程序。").arg(filePath));
+    });
+
+    progress.exec();
+}
+
+bool MainWindow::verifyChecksum(const QString &filePath, const QString &expectedChecksum)
+{
+    // 计算文件的SHA256校验和
+    QFile file(filePath);
+    if (!file.open(QIODevice::ReadOnly)) {
+        qDebug() << "无法打开文件进行校验和计算: " << filePath;
+        return false;
+    }
+
+    QCryptographicHash hash(QCryptographicHash::Sha256);
+    if (!hash.addData(&file)) {
+        file.close();
+        qDebug() << "无法计算文件校验和: " << filePath;
+        return false;
+    }
+
+    file.close();
+    QString actualChecksum = hash.result().toHex();
+
+    // 比较校验和（忽略大小写）
+    return actualChecksum.compare(expectedChecksum, Qt::CaseInsensitive) == 0;
+}
+
+void MainWindow::applyUpdate(const QString &updateFilePath)
+{
+    Q_UNUSED(updateFilePath);
+    // 此函数留空，因为需求是提示用户手动解压缩
+}
+
+void MainWindow::restartApplication()
+{
+    // 重启应用程序
+    qApp->quit();
+    QProcess::startDetached(qApp->applicationFilePath(), QStringList());
+}
+
+// 重复代码已删除

@@ -13,6 +13,9 @@
 #include <QAction>
 #include "globalhookmanager.h"
 
+// 应用程序版本号宏定义
+#define APP_VERSION "1.7"
+
 QT_BEGIN_NAMESPACE
 namespace Ui {
 class MainWindow;
@@ -40,6 +43,19 @@ private slots:
     void resetStatistics();
     // 显示关于对话框
     void showAboutDialog();
+    // 检查更新
+    void checkForUpdates();
+    // 下载更新
+    void downloadUpdate(const QString &updateUrl, const QString &checksum, const QString &latestVersion);
+    // 验证校验和
+    bool verifyChecksum(const QString &filePath, const QString &expectedChecksum);
+    // 应用更新
+    void applyUpdate(const QString &updateFilePath);
+    // 重启应用
+    void restartApplication();
+    // 退出应用程序
+    void exitApplication();
+
     // 处理全局键盘事件
     void handleGlobalKeyPress();
     // 处理具体按键事件
@@ -53,6 +69,9 @@ private slots:
     // 显示详情对话框
     void showDetailsDialog();
 private:
+    // 版本号比较函数
+    bool isVersionGreater(const QString &newVersion, const QString &oldVersion);
+
     // 测试QToolTip功能的辅助函数 [已注释]
     // void testToolTip();
     // 统一导出功能

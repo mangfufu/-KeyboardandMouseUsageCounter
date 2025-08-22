@@ -3,7 +3,7 @@ QT       += core gui
 # 设置项目名称
 TARGET = KeyboardandMouseUsage
 
-greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
+greaterThan(QT_MAJOR_VERSION, 4): QT += widgets network
 
 CONFIG += c++17
 RC_FILE += icon.rc
