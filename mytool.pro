@@ -27,6 +27,18 @@ mainwindow.ui
 # 添加Windows库支持
 win32: LIBS += -luser32
 
+# 配置QuaZip库 (如果已安装)
+# 手动指定QuaZip库的路径和链接选项
+# win32: LIBS += -L$$PWD/quazip/lib -lquazip
+# INCLUDEPATH += $$PWD/quazip/include
+# DEPENDPATH += $$PWD/quazip/include
+
+# 对于未安装QuaZip的情况，默认使用手动更新方式
+DEFINES += NO_QUAZIP
+
+# 说明：如果需要启用ZIP文件自动解压缩功能，请先下载并编译QuaZip库，
+# 然后取消上面的注释并根据实际安装路径调整库和头文件的路径。
+
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin
 else: unix:!android: target.path = /opt/$${TARGET}/bin

@@ -11,10 +11,11 @@
 #include <QSystemTrayIcon>
 #include <QMenu>
 #include <QAction>
+#include <QDir>
 #include "globalhookmanager.h"
 
 // 应用程序版本号宏定义
-#define APP_VERSION "1.8"
+#define APP_VERSION "1.9"
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -50,7 +51,9 @@ private slots:
     // 验证校验和
     bool verifyChecksum(const QString &filePath, const QString &expectedChecksum);
     // 应用更新
-    void applyUpdate(const QString &updateFilePath);
+    void applyUpdate(const QString &updateFilePath, const QString &fileType);
+    // 复制目录辅助函数
+    bool copyDir(const QDir &sourceDir, QDir &destDir);
     // 重启应用
     void restartApplication();
     // 退出应用程序

@@ -18,6 +18,12 @@
 #include <QNetworkAccessManager>
 #include <QNetworkRequest>
 #include <QNetworkReply>
+
+// 根据NO_QUAZIP宏定义条件包含QuaZip头文件
+#ifndef NO_QUAZIP
+#include <quazip.h>
+#include <quazipfile.h>
+#endif
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
@@ -246,40 +252,48 @@ void MainWindow::showEvent(QShowEvent *event)
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
-    // 创建退出选项对话框
-    QMessageBox msgBox;
-    msgBox.setWindowTitle("退出选项");
-    msgBox.setText("请选择操作:");
-    msgBox.setIcon(QMessageBox::Question);
+    // 只有当事件是由用户点击窗口×按钮产生时，才显示退出选项对话框
+    if (event->spontaneous()) {
+        // 创建退出选项对话框
+        QMessageBox msgBox;
+        msgBox.setWindowTitle("退出选项");
+        msgBox.setText("请选择操作:");
+        msgBox.setIcon(QMessageBox::Question);
 
-    // 添加退出按钮
-    QPushButton *exitButton = msgBox.addButton("退出程序", QMessageBox::ActionRole);
-    // 添加最小化到托盘按钮
-    QPushButton *minimizeButton = msgBox.addButton("最小化到托盘", QMessageBox::ActionRole);
-    // 设置标准按钮为取消按钮
-    msgBox.setStandardButtons(QMessageBox::Cancel);
-    // 设置取消按钮文本
-    msgBox.button(QMessageBox::Cancel)->setText("取消");
+        // 添加退出按钮
+        QPushButton *exitButton = msgBox.addButton("退出程序", QMessageBox::ActionRole);
+        // 添加最小化到托盘按钮
+        QPushButton *minimizeButton = msgBox.addButton("最小化到托盘", QMessageBox::ActionRole);
+        // 设置标准按钮为取消按钮
+        msgBox.setStandardButtons(QMessageBox::Cancel);
+        // 设置取消按钮文本
+        msgBox.button(QMessageBox::Cancel)->setText("取消");
 
-    // 显示对话框并等待用户选择
-    msgBox.exec();
+        // 显示对话框并等待用户选择
+        msgBox.exec();
 
-    // 根据用户选择执行相应操作
-    if (msgBox.clickedButton() == exitButton) {
-        // 保存统计数据
-        saveStatistics();
-        // 清理钩子
-        cleanupHooks();
-        // 调用基类事件处理
-        QMainWindow::closeEvent(event);
-    } else if (msgBox.clickedButton() == minimizeButton) {
-        // 最小化到托盘
-        saveStatistics();
-        hide();
-        event->ignore();
+        // 根据用户选择执行相应操作
+        if (msgBox.clickedButton() == exitButton) {
+            // 保存统计数据
+            saveStatistics();
+            // 清理钩子
+            cleanupHooks();
+            // 调用基类事件处理
+            QMainWindow::closeEvent(event);
+        } else if (msgBox.clickedButton() == minimizeButton) {
+            // 最小化到托盘
+            saveStatistics();
+            hide();
+            event->ignore();
+        } else {
+            // 点击取消按钮，忽略事件
+            event->ignore();
+        }
     } else {
-        // 点击×按钮或其他情况，只关闭对话框
-        event->ignore();
+        // 非用户交互产生的关闭事件（如程序内部调用close()），直接关闭窗口
+        saveStatistics();
+        cleanupHooks();
+        QMainWindow::closeEvent(event);
     }
 }
 
@@ -2513,17 +2527,15 @@ void MainWindow::checkForUpdates()
             QString updateUrl;
             QString checksum;
 
-            // 查找资产 - 同时查找ZIP和EXE文件
+            // 查找资产 - 只查找EXE文件
         QJsonArray assets = latestRelease["assets"].toArray();
-        QString zipUrl, exeUrl;
+        QString exeUrl;
         for (const QJsonValue &asset : assets) {
             QJsonObject assetObj = asset.toObject();
             QString name = assetObj["name"].toString();
-            if (name.contains(".zip", Qt::CaseInsensitive)) {
-                zipUrl = assetObj["browser_download_url"].toString();
-            }
             if (name.contains(".exe", Qt::CaseInsensitive)) {
                 exeUrl = assetObj["browser_download_url"].toString();
+                break; // 找到一个EXE文件就可以退出循环了
             }
         }
 
@@ -2535,44 +2547,22 @@ void MainWindow::checkForUpdates()
                 checksum = match.captured(1);
             }
 
-            // 提示用户选择下载类型
-            QString downloadType;
-            if (!zipUrl.isEmpty() && !exeUrl.isEmpty()) {
-                // 同时有ZIP和EXE文件
+            // 提示用户下载更新
+            if (!exeUrl.isEmpty()) {
+                // 只有EXE文件
                 QMessageBox msgBox(this);
                 msgBox.setWindowTitle("发现新版本");
-                msgBox.setText(QString("发现新版本 %1，当前版本 %2。\n请选择下载类型：").arg(latestVersion).arg(APP_VERSION));
+                msgBox.setText(QString("发现新版本 %1，当前版本 %2。\n是否下载更新？").arg(latestVersion).arg(APP_VERSION));
                 msgBox.setStandardButtons(QMessageBox::NoButton);
 
                 // 添加自定义按钮
-                QPushButton *zipButton = msgBox.addButton("ZIP压缩包", QMessageBox::ActionRole);
-                QPushButton *exeButton = msgBox.addButton("EXE安装程序", QMessageBox::ActionRole);
+                QPushButton *downloadButton = msgBox.addButton("下载", QMessageBox::ActionRole);
                 msgBox.addButton(QMessageBox::Cancel);
                 msgBox.button(QMessageBox::Cancel)->setText("取消");
 
                 msgBox.exec();
 
-                if (msgBox.clickedButton() == zipButton) {
-                    downloadUpdate(zipUrl, checksum, latestVersion, "zip");
-                } else if (msgBox.clickedButton() == exeButton) {
-                    downloadUpdate(exeUrl, checksum, latestVersion, "exe");
-                }
-            } else if (!zipUrl.isEmpty()) {
-                // 只有ZIP文件
-                int reply = QMessageBox::question(this, "发现新版本",
-                    QString("发现新版本 %1，当前版本 %2。\n是否下载ZIP压缩包更新？").arg(latestVersion).arg(APP_VERSION),
-                    QMessageBox::Yes | QMessageBox::No);
-
-                if (reply == QMessageBox::Yes) {
-                    downloadUpdate(zipUrl, checksum, latestVersion, "zip");
-                }
-            } else if (!exeUrl.isEmpty()) {
-                // 只有EXE文件
-                int reply = QMessageBox::question(this, "发现新版本",
-                    QString("发现新版本 %1，当前版本 %2。\n是否下载EXE安装程序更新？").arg(latestVersion).arg(APP_VERSION),
-                    QMessageBox::Yes | QMessageBox::No);
-
-                if (reply == QMessageBox::Yes) {
+                if (msgBox.clickedButton() == downloadButton) {
                     downloadUpdate(exeUrl, checksum, latestVersion, "exe");
                 }
             } else {
@@ -2678,14 +2668,8 @@ void MainWindow::downloadUpdate(const QString &updateUrl, const QString &checksu
             return;
         }
 
-        // 根据文件类型显示不同的提示信息
-        QString message;
-        if (fileType == "exe") {
-            message = QString("更新文件已下载到:\n%1\n\n请退出程序，运行安装程序进行更新。").arg(filePath);
-        } else {
-            message = QString("更新文件已下载到:\n%1\n\n请退出程序，解压缩文件并覆盖旧程序。").arg(filePath);
-        }
-        QMessageBox::information(this, "下载完成", message);
+        // 下载完成后自动应用更新
+        applyUpdate(filePath, fileType);
     });
 
     progress.exec();
@@ -2714,10 +2698,93 @@ bool MainWindow::verifyChecksum(const QString &filePath, const QString &expected
     return actualChecksum.compare(expectedChecksum, Qt::CaseInsensitive) == 0;
 }
 
-void MainWindow::applyUpdate(const QString &updateFilePath)
+void MainWindow::applyUpdate(const QString &updateFilePath, const QString &fileType)
 {
-    Q_UNUSED(updateFilePath);
-    // 此函数留空，因为需求是提示用户手动解压缩
+    // 根据文件类型执行不同的更新逻辑
+    if (fileType == "exe") {
+        // 对于EXE文件，直接运行安装程序并退出应用
+        QProcess::startDetached(updateFilePath);
+        qApp->quit();
+    } else if (fileType == "zip") {
+        // 对于ZIP文件，解压缩并覆盖现有文件
+        QString appPath = QCoreApplication::applicationDirPath();
+        QString tempDir = appPath + QDir::separator() + "temp_update";
+        QDir(tempDir).removeRecursively();
+        QDir().mkdir(tempDir);
+
+        // 根据NO_QUAZIP宏定义条件编译ZIP解压缩功能
+        #ifndef NO_QUAZIP
+        // 使用QuaZip库解压缩文件
+        QuaZip zip(updateFilePath);
+        if (zip.open(QuaZip::mdUnzip)) {
+            QuaZipFile file(&zip);
+            for (bool f = zip.goToFirstFile(); f; f = zip.goToNextFile()) {
+                QString fileName = zip.getCurrentFileName();
+                QString destFilePath = tempDir + QDir::separator() + fileName;
+
+                // 创建目标目录
+                QFileInfo fileInfo(destFilePath);
+                QDir().mkpath(fileInfo.path());
+
+                // 写入文件
+                QFile destFile(destFilePath);
+                if (destFile.open(QIODevice::WriteOnly)) {
+                    file.open(QIODevice::ReadOnly);
+                    destFile.write(file.readAll());
+                    file.close();
+                    destFile.close();
+                }
+            }
+            zip.close();
+
+            // 复制文件到应用程序目录
+            QDir sourceDir(tempDir);
+            copyDir(sourceDir, QDir(appPath));
+
+            // 清理临时目录
+            QDir(tempDir).removeRecursively();
+
+            // 重启应用程序
+            restartApplication();
+        } else {
+            QMessageBox::critical(this, "更新失败", "无法打开ZIP文件");
+        }
+        #else
+        // 未安装QuaZip库，提示用户手动更新
+        QMessageBox::information(this, "下载完成",
+            QString("更新文件已下载到:\n%1\n\n请退出程序，解压缩文件并覆盖旧程序。").arg(updateFilePath));
+        #endif
+    }
+}
+
+// 复制目录辅助函数
+bool MainWindow::copyDir(const QDir &sourceDir, QDir &destDir)
+{
+    if (!destDir.exists()) {
+        if (!QDir().mkdir(destDir.path())) {
+            return false;
+        }
+    }
+
+    QStringList files = sourceDir.entryList(QDir::Files);
+    for (const QString &file : files) {
+        QString sourcePath = sourceDir.filePath(file);
+        QString destPath = destDir.filePath(file);
+        if (!QFile::copy(sourcePath, destPath)) {
+            return false;
+        }
+    }
+
+    QStringList dirs = sourceDir.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+    for (const QString &dir : dirs) {
+        QDir sourceSubDir(sourceDir.filePath(dir));
+        QDir destSubDir(destDir.filePath(dir));
+        if (!copyDir(sourceSubDir, destSubDir)) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 void MainWindow::restartApplication()
